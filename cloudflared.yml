@@ -1,0 +1,7 @@
+tunnel: <你的TunnelUUID>
+credentials-file: /root/.cloudflared/credentials.json
+
+ingress:
+  - hostname: idx.loyalme.eu.org
+    service: http://127.0.0.1:80
+  - service: http_status:404
