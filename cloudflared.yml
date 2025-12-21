@@ -1,4 +1,4 @@
-tunnel: <你的TunnelUUID>
+tunnel: idx
 credentials-file: /root/.cloudflared/credentials.json
 
 ingress:
