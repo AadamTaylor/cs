@@ -1,0 +1,3 @@
+:80
+
+respond "Cloudflare Tunnel + Caddy Ready" 200
