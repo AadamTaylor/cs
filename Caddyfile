@@ -1,3 +1,24 @@
-:3000
+:3000 {
+    # 默认主页
+    respond "Cloudflare Tunnel + Caddy Ready" 200
 
-respond "Cloudflare Tunnel + Caddy Ready" 200
+    # 管理页面
+    handle /admin* {
+        root * /usr/share/caddy/admin
+        file_server
+    }
+
+    # 分流示例（后续可增加其他服务）
+    handle /service1* {
+        reverse_proxy 127.0.0.1:1212
+    }
+
+    handle /service2* {
+        reverse_proxy 127.0.0.1:1313
+    }
+
+    # 其他未匹配路径返回 404
+    handle {
+        respond "Not Found" 404
+    }
+}
