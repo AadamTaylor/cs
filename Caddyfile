@@ -1,6 +1,6 @@
 :3000 {
     # 管理后台
-    handle /admin* {
+    handle_path /admin* {
         reverse_proxy localhost:4000
     }
 
