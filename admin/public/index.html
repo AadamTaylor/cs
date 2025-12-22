@@ -1,34 +1,28 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8">
-    <title>Caddy Admin</title>
+<meta charset="UTF-8">
+<title>Caddy 管理后台</title>
 </head>
 <body>
-    <h1>Caddy 管理后台</h1>
-    <form id="routeForm">
-        <input type="text" id="path" placeholder="路由路径，例如 /service1" required />
-        <input type="text" id="target" placeholder="目标服务，例如 localhost:5000" required />
-        <button type="submit">添加路由</button>
-    </form>
-    <pre id="log"></pre>
-    <script>
-        const form = document.getElementById('routeForm');
-        const log = document.getElementById('log');
-
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const path = document.getElementById('path').value;
-            const target = document.getElementById('target').value;
-
-            const res = await fetch('/routes', {
-                method: 'POST',
-                headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({ path, target })
-            });
-            const text = await res.text();
-            log.textContent = text;
-        });
-    </script>
+<h1>Caddy 管理后台</h1>
+<form id="routeForm">
+    路由路径: <input type="text" name="path" placeholder="/service1"><br>
+    目标服务: <input type="text" name="target" placeholder="localhost:5000"><br>
+    <button type="submit">添加路由</button>
+</form>
+<script>
+document.getElementById('routeForm').onsubmit = async e => {
+    e.preventDefault();
+    const path = e.target.path.value;
+    const target = e.target.target.value;
+    const res = await fetch('/api/routes', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({path, target})
+    });
+    alert(await res.text());
+}
+</script>
 </body>
 </html>
