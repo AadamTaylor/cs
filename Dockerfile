@@ -19,4 +19,5 @@ COPY admin /admin
 EXPOSE 3000
 
 # 启动 cloudflared + Caddy + 管理后台
-CMD ["sh", "-c", "cloudflared tunnel --no-autoupdate run & cd /admin && npm install && node index.js & caddy run --config /etc/caddy/Caddyfile --adapter caddyfile"]
+CMD ["sh", "-c", "cloudflared tunnel --no-autoupdate run & node /admin/server.js & caddy run --config /etc/caddy/Caddyfile --adapter caddyfile"]
+
