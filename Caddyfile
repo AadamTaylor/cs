@@ -1,9 +1,11 @@
 :3000 {
     # 管理后台
-    route /admin/* {
+    handle /admin* {
         reverse_proxy localhost:4000
     }
 
-    # 默认首页
-    respond "Cloudflare Tunnel + Caddy Ready" 200
+    # 其他路径默认首页
+    handle {
+        respond "Cloudflare Tunnel + Caddy Ready" 200
+    }
 }
