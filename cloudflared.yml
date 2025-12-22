@@ -1,5 +1,4 @@
 tunnel: idx
-credentials-file: /root/.cloudflared/credentials.json
 
 ingress:
   - hostname: idx.loyalme.eu.org
