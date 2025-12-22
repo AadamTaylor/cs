@@ -13,7 +13,7 @@ COPY Caddyfile /etc/caddy/Caddyfile
 COPY cloudflared.yml /etc/cloudflared/config.yml
 
 # 暴露端口
-EXPOSE 80 8080
+EXPOSE 3000
 
 # 启动 cloudflared + Caddy
 CMD ["sh", "-c", "cloudflared tunnel --no-autoupdate run & caddy run --config /etc/caddy/Caddyfile --adapter caddyfile"]
