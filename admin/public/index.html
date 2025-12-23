@@ -39,8 +39,6 @@
 </table>
 
 <script>
-const API_PREFIX = '/admin/api'; // ✅ 新增前缀
-
 function getStatusIcon(route) {
   if (route.status === 'active' && route.alive) return '✅';
   if (route.status === 'active' && route.alive === false) return '❌';
@@ -51,7 +49,7 @@ function getStatusIcon(route) {
 
 async function fetchRoutes() {
   try {
-    const res = await fetch(`${API_PREFIX}/routes`);
+    const res = await fetch('/admin/api/routes'); // 加了 /admin
     const routes = await res.json();
     const tbody = document.querySelector('#routesTable tbody');
     tbody.innerHTML = '';
@@ -81,7 +79,7 @@ async function addRoute() {
   if (!path || !target) return alert('请填写路径和目标');
 
   try {
-    const res = await fetch(`${API_PREFIX}/routes`, {
+    const res = await fetch('/admin/api/routes', { // 加了 /admin
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path, target })
@@ -99,7 +97,7 @@ async function addRoute() {
 async function deleteRoute(index) {
   if (!confirm('确认删除此路由吗？')) return;
   try {
-    const res = await fetch(`${API_PREFIX}/routes/${index}`, { method: 'DELETE' });
+    const res = await fetch(`/admin/api/routes/${index}`, { method: 'DELETE' }); // 加了 /admin
     if (!res.ok) throw new Error(await res.text());
     await fetchRoutes();
   } catch (e) {
@@ -109,7 +107,7 @@ async function deleteRoute(index) {
 
 async function reloadRoutes() {
   try {
-    const res = await fetch(`${API_PREFIX}/reload`, { method: 'POST' });
+    const res = await fetch('/admin/api/reload', { method: 'POST' }); // 加了 /admin
     if (!res.ok) throw new Error(await res.text());
     await fetchRoutes();
   } catch (e) {
