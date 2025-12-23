@@ -17,7 +17,7 @@ let routes = fs.existsSync(ROUTES_FILE)
 
 // 自动获取 Caddy server 名
 async function getServerName() {
-  const res = await axios.get('http://localhost:2019/config/');
+  const res = await axios.get('http://127.0.0.1:2019/config/');
   const servers = res.data.apps.http.servers;
   return Object.keys(servers)[0];
 }
@@ -25,10 +25,8 @@ async function getServerName() {
 // 构造 Caddy route JSON（Admin API 最新格式）
 function buildCaddyRoute(route) {
   return {
-    matcher_sets: [
-      { path: [route.path + '*'] }
-    ],
-    handlers: [
+    match: [{ path: [route.path + '*'] }],
+    handle: [
       {
         handler: 'reverse_proxy',
         upstreams: [{ dial: route.target }]
@@ -41,7 +39,7 @@ function buildCaddyRoute(route) {
 async function applyRoute(route) {
   const serverName = await getServerName();
   await axios.post(
-    `http://localhost:2019/config/apps/http/servers/${serverName}/routes`,
+    `http://127.0.0.1:2019/config/apps/http/servers/${serverName}/routes`,
     buildCaddyRoute(route)
   );
 }
@@ -50,7 +48,7 @@ async function applyRoute(route) {
 async function deleteRouteByIndex(index) {
   const serverName = await getServerName();
   await axios.delete(
-    `http://localhost:2019/config/apps/http/servers/${serverName}/routes/${index}`
+    `http://127.0.0.1:2019/config/apps/http/servers/${serverName}/routes/${index}`
   );
 }
 
@@ -130,7 +128,7 @@ app.post('/api/reload', async (_, res) => {
     const serverName = await getServerName();
 
     // 获取当前 routes 并删除
-    const cfg = await axios.get('http://localhost:2019/config/');
+    const cfg = await axios.get('http://127.0.0.1:2019/config/');
     const currentRoutes = cfg.data.apps.http.servers[serverName].routes || [];
     for (let i = currentRoutes.length - 1; i >= 0; i--) {
       await deleteRouteByIndex(i);
