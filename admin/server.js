@@ -2,31 +2,27 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const fs = require('fs');
 const axios = require('axios');
-const path = require('path');
 
 const app = express();
 app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, 'public')));
 
-const ROUTES_FILE = path.join(__dirname, 'routes.json');
+const ROUTES_FILE = './routes.json';
 let routes = fs.existsSync(ROUTES_FILE)
   ? JSON.parse(fs.readFileSync(ROUTES_FILE))
   : [];
 
-/* ========= 工具函数 ========= */
-
+/* ========= Caddy Admin API 工具 ========= */
 async function requestCaddy(method, url, data) {
   try {
     const res = await axios({
       method,
       url,
       data,
-      responseType: 'text',
-      validateStatus: () => true
+      validateStatus: () => true,
     });
 
     if (res.headers['content-type']?.includes('application/json') && res.data) {
-      return JSON.parse(res.data);
+      return res.data;
     }
 
     if (res.status >= 200 && res.status < 300) return {};
@@ -38,8 +34,7 @@ async function requestCaddy(method, url, data) {
 
 async function getServerName() {
   const cfg = await requestCaddy('get', 'http://127.0.0.1:2019/config/');
-  const servers = cfg.apps.http.servers;
-  return Object.keys(servers)[0];
+  return Object.keys(cfg.apps.http.servers)[0];
 }
 
 function buildCaddyRoute(route) {
@@ -53,8 +48,6 @@ function buildCaddyRoute(route) {
     ]
   };
 }
-
-/* ========= 路由操作 ========= */
 
 async function applyRoute(route) {
   const serverName = await getServerName();
@@ -107,44 +100,38 @@ async function checkRoute(path) {
 async function updateRoutesStatus() {
   for (const r of routes) {
     r.alive = await checkRoute(r.path);
-    if (!r.status || r.status === 'pending') {
-      r.status = r.alive ? 'active' : 'failed';
-    }
+    r.status = r.alive ? 'active' : 'failed';
   }
   fs.writeFileSync(ROUTES_FILE, JSON.stringify(routes, null, 2));
 }
 
 /* ========= API ========= */
-
-// 去掉 /admin 前缀
-app.use('/', express.Router());
+const router = express.Router();
+app.use('/admin/api', router);
 
 // 获取路由列表
-app.get('/api/routes', async (_, res) => {
+router.get('/routes', async (_, res) => {
   try {
     await updateRoutesStatus();
     res.json(routes);
   } catch (e) {
-    res.status(500).json({ error: '获取路由失败: ' + e.message });
+    res.status(500).json({ error: e.message });
   }
 });
 
-// 添加业务路由
-app.post('/api/routes', async (req, res) => {
-  const { path: p, target } = req.body;
-  if (!p || !target) return res.status(400).json({ status: 'failed', error: '参数缺失' });
+// 添加路由
+router.post('/routes', async (req, res) => {
+  const { path, target } = req.body;
+  if (!path || !target) return res.status(400).json({ error: '参数缺失' });
+  if (['/admin', '/'].some(lp => path.startsWith(lp))) return res.status(403).json({ error: '禁止修改锁死路由' });
 
-  if (['/admin', '/'].some(lp => p.startsWith(lp))) {
-    return res.status(403).json({ status: 'failed', error: '禁止修改锁死路由' });
-  }
-
-  const route = { path: p, target, status: 'pending', alive: false };
+  const route = { path, target, status: 'pending', alive: false };
   routes.push(route);
   fs.writeFileSync(ROUTES_FILE, JSON.stringify(routes, null, 2));
 
   try {
     await applyRoute(route);
-    route.alive = await checkRoute(p);
+    route.alive = await checkRoute(path);
     route.status = route.alive ? 'active' : 'failed';
     fs.writeFileSync(ROUTES_FILE, JSON.stringify(routes, null, 2));
     res.json(route);
@@ -156,16 +143,11 @@ app.post('/api/routes', async (req, res) => {
   }
 });
 
-// 删除业务路由
-app.delete('/api/routes/:index', async (req, res) => {
+// 删除路由
+router.delete('/routes/:index', async (req, res) => {
   const index = Number(req.params.index);
-  if (isNaN(index)) return res.status(400).json({ status: 'failed', error: 'index 错误' });
-
-  const route = routes[index];
-  if (!route) return res.status(404).json({ status: 'failed', error: '路由不存在' });
-  if (['/admin', '/'].some(lp => route.path.startsWith(lp))) {
-    return res.status(403).json({ status: 'failed', error: '禁止删除锁死路由' });
-  }
+  if (isNaN(index) || !routes[index]) return res.status(400).json({ error: 'index 错误或不存在' });
+  if (['/admin', '/'].some(lp => routes[index].path.startsWith(lp))) return res.status(403).json({ error: '禁止删除锁死路由' });
 
   try {
     await deleteRouteByIndex(index);
@@ -173,12 +155,12 @@ app.delete('/api/routes/:index', async (req, res) => {
     fs.writeFileSync(ROUTES_FILE, JSON.stringify(routes, null, 2));
     res.json({ status: 'ok' });
   } catch (e) {
-    res.status(500).json({ status: 'failed', error: e.message });
+    res.status(500).json({ error: e.message });
   }
 });
 
-// 一键重载业务路由
-app.post('/api/reload', async (_, res) => {
+// 重载所有路由
+router.post('/reload', async (_, res) => {
   try {
     const serverName = await getServerName();
     const cfg = await requestCaddy('get', 'http://127.0.0.1:2019/config/');
@@ -203,10 +185,8 @@ app.post('/api/reload', async (_, res) => {
     fs.writeFileSync(ROUTES_FILE, JSON.stringify(routes, null, 2));
     res.json({ status: 'ok' });
   } catch (e) {
-    res.status(500).json({ status: 'failed', error: e.message });
+    res.status(500).json({ error: e.message });
   }
 });
 
-app.listen(4000, () => {
-  console.log('Admin panel running on port 4000');
-});
+app.listen(4000, () => console.log('Node API running on port 4000'));
