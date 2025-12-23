@@ -15,7 +15,6 @@ let routes = fs.existsSync(ROUTES_FILE)
 
 /* ========= 工具函数 ========= */
 
-// 安全请求 Caddy Admin API
 async function requestCaddy(method, url, data) {
   try {
     const res = await axios({
@@ -37,14 +36,12 @@ async function requestCaddy(method, url, data) {
   }
 }
 
-// 获取 Caddy server 名
 async function getServerName() {
   const cfg = await requestCaddy('get', 'http://127.0.0.1:2019/config/');
   const servers = cfg.apps.http.servers;
   return Object.keys(servers)[0];
 }
 
-// 构造业务路由 JSON
 function buildCaddyRoute(route) {
   return {
     match: [{ path: [route.path + '*'] }],
@@ -59,7 +56,6 @@ function buildCaddyRoute(route) {
 
 /* ========= 路由操作 ========= */
 
-// 添加业务路由
 async function applyRoute(route) {
   const serverName = await getServerName();
   const cfg = await requestCaddy('get', 'http://127.0.0.1:2019/config/');
@@ -80,7 +76,6 @@ async function applyRoute(route) {
   );
 }
 
-// 删除业务路由
 async function deleteRouteByIndex(index) {
   const serverName = await getServerName();
   const cfg = await requestCaddy('get', 'http://127.0.0.1:2019/config/');
@@ -100,7 +95,6 @@ async function deleteRouteByIndex(index) {
   );
 }
 
-// 检查路由是否可达
 async function checkRoute(path) {
   try {
     const res = await axios.get(`http://127.0.0.1:3000${path}`, { timeout: 2000, validateStatus: () => true });
@@ -110,7 +104,6 @@ async function checkRoute(path) {
   }
 }
 
-// 更新路由状态
 async function updateRoutesStatus() {
   for (const r of routes) {
     r.alive = await checkRoute(r.path);
@@ -123,11 +116,11 @@ async function updateRoutesStatus() {
 
 /* ========= API ========= */
 
-const adminRouter = express.Router();
-app.use('/admin', adminRouter);
+// 去掉 /admin 前缀
+app.use('/', express.Router());
 
 // 获取路由列表
-adminRouter.get('/api/routes', async (_, res) => {
+app.get('/api/routes', async (_, res) => {
   try {
     await updateRoutesStatus();
     res.json(routes);
@@ -137,9 +130,10 @@ adminRouter.get('/api/routes', async (_, res) => {
 });
 
 // 添加业务路由
-adminRouter.post('/api/routes', async (req, res) => {
+app.post('/api/routes', async (req, res) => {
   const { path: p, target } = req.body;
   if (!p || !target) return res.status(400).json({ status: 'failed', error: '参数缺失' });
+
   if (['/admin', '/'].some(lp => p.startsWith(lp))) {
     return res.status(403).json({ status: 'failed', error: '禁止修改锁死路由' });
   }
@@ -163,7 +157,7 @@ adminRouter.post('/api/routes', async (req, res) => {
 });
 
 // 删除业务路由
-adminRouter.delete('/api/routes/:index', async (req, res) => {
+app.delete('/api/routes/:index', async (req, res) => {
   const index = Number(req.params.index);
   if (isNaN(index)) return res.status(400).json({ status: 'failed', error: 'index 错误' });
 
@@ -184,7 +178,7 @@ adminRouter.delete('/api/routes/:index', async (req, res) => {
 });
 
 // 一键重载业务路由
-adminRouter.post('/api/reload', async (_, res) => {
+app.post('/api/reload', async (_, res) => {
   try {
     const serverName = await getServerName();
     const cfg = await requestCaddy('get', 'http://127.0.0.1:2019/config/');
