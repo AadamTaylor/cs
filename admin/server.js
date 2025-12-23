@@ -25,12 +25,10 @@ async function getServerName() {
 // 构造 Caddy route 对象（✅ 正确 JSON 结构）
 function buildCaddyRoute(route) {
   return {
-    matcher_sets: [
-      {
-        path: [route.path + '*']
-      }
+    match: [
+      { path: [route.path + '*'] }
     ],
-    handlers: [
+    handle: [
       {
         handler: 'reverse_proxy',
         upstreams: [
@@ -50,7 +48,7 @@ async function applyRoute(route) {
   );
 }
 
-// 删除指定 index 的路由（⚠️ 这是关键）
+// 删除指定 index 的路由
 async function deleteRouteByIndex(index) {
   const serverName = await getServerName();
   return axios.delete(
@@ -58,7 +56,7 @@ async function deleteRouteByIndex(index) {
   );
 }
 
-// 真实生效检测（health check）
+// 健康检测
 async function checkRoute(path) {
   try {
     const res = await axios.get(`http://127.0.0.1:3000${path}`, {
@@ -103,7 +101,7 @@ app.post('/api/routes', async (req, res) => {
   }
 });
 
-// 删除路由（精确删除，不再 PUT）
+// 删除路由
 app.delete('/api/routes/:index', async (req, res) => {
   const index = Number(req.params.index);
   if (isNaN(index)) return res.status(400).send('index 错误');
@@ -118,7 +116,7 @@ app.delete('/api/routes/:index', async (req, res) => {
   }
 });
 
-// 一键重载（⚠️ 不再清空 routes）
+// 一键重载
 app.post('/api/reload', async (_, res) => {
   try {
     const serverName = await getServerName();
