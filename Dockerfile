@@ -1,4 +1,3 @@
-# Caddy 官方轻量镜像
 FROM caddy:2-alpine
 
 # 安装 curl、bash、Node.js、npm
@@ -14,6 +13,12 @@ COPY cloudflared.yml /etc/cloudflared/config.yml
 
 # 拷贝后台管理程序
 COPY admin /admin
+
+# 👇👇👇 核心修复（就这三行）👇👇👇
+WORKDIR /admin
+RUN npm install
+WORKDIR /
+# 👆👆👆 核心修复 👆👆👆
 
 # 暴露单端口
 EXPOSE 3000
