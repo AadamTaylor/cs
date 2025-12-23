@@ -17,9 +17,13 @@ let routes = fs.existsSync(ROUTES_FILE)
 
 // 自动获取 Caddy server 名
 async function getServerName() {
-  const res = await axios.get('http://127.0.0.1:2019/config/');
-  const servers = res.data.apps.http.servers;
-  return Object.keys(servers)[0];
+  try {
+    const res = await axios.get('http://127.0.0.1:2019/config/', { responseType: 'json' });
+    const servers = res.data.apps.http.servers;
+    return Object.keys(servers)[0];
+  } catch (e) {
+    throw new Error('获取 Caddy server 名失败: ' + e.message);
+  }
 }
 
 // 构造 Caddy route JSON（Admin API 最新格式）
@@ -35,10 +39,34 @@ function buildCaddyRoute(route) {
   };
 }
 
+// 通用请求 Caddy Admin API
+async function requestCaddy(method, url, data) {
+  try {
+    const res = await axios({
+      method,
+      url,
+      data,
+      responseType: 'text',
+      validateStatus: () => true
+    });
+
+    // 尝试解析 JSON
+    try {
+      return JSON.parse(res.data);
+    } catch {
+      if (res.status >= 200 && res.status < 300) return {};
+      throw new Error(`Caddy 返回非 JSON 响应: ${res.data}`);
+    }
+  } catch (e) {
+    throw new Error(e.message);
+  }
+}
+
 // 添加单条路由
 async function applyRoute(route) {
   const serverName = await getServerName();
-  await axios.post(
+  return await requestCaddy(
+    'post',
     `http://127.0.0.1:2019/config/apps/http/servers/${serverName}/routes`,
     buildCaddyRoute(route)
   );
@@ -47,7 +75,8 @@ async function applyRoute(route) {
 // 删除指定 index 的路由
 async function deleteRouteByIndex(index) {
   const serverName = await getServerName();
-  await axios.delete(
+  return await requestCaddy(
+    'delete',
     `http://127.0.0.1:2019/config/apps/http/servers/${serverName}/routes/${index}`
   );
 }
@@ -80,14 +109,18 @@ async function updateRoutesStatus() {
 
 // 获取路由列表
 app.get('/api/routes', async (_, res) => {
-  await updateRoutesStatus();
-  res.json(routes);
+  try {
+    await updateRoutesStatus();
+    res.json(routes);
+  } catch (e) {
+    res.status(500).json({ error: '获取路由失败: ' + e.message });
+  }
 });
 
 // 添加路由
 app.post('/api/routes', async (req, res) => {
   const { path: p, target } = req.body;
-  if (!p || !target) return res.status(400).send('参数缺失');
+  if (!p || !target) return res.status(400).json({ status: 'failed', error: '参数缺失' });
 
   const route = { path: p, target, status: 'pending', alive: false };
   routes.push(route);
@@ -110,15 +143,15 @@ app.post('/api/routes', async (req, res) => {
 // 删除路由
 app.delete('/api/routes/:index', async (req, res) => {
   const index = Number(req.params.index);
-  if (isNaN(index)) return res.status(400).send('index 错误');
+  if (isNaN(index)) return res.status(400).json({ status: 'failed', error: 'index 错误' });
 
   try {
     await deleteRouteByIndex(index);
     routes.splice(index, 1);
     fs.writeFileSync(ROUTES_FILE, JSON.stringify(routes, null, 2));
-    res.send('已删除');
+    res.json({ status: 'ok' });
   } catch (e) {
-    res.status(500).send('删除失败');
+    res.status(500).json({ status: 'failed', error: e.message });
   }
 });
 
@@ -128,8 +161,8 @@ app.post('/api/reload', async (_, res) => {
     const serverName = await getServerName();
 
     // 获取当前 routes 并删除
-    const cfg = await axios.get('http://127.0.0.1:2019/config/');
-    const currentRoutes = cfg.data.apps.http.servers[serverName].routes || [];
+    const cfg = await requestCaddy('get', 'http://127.0.0.1:2019/config/');
+    const currentRoutes = cfg.apps?.http?.servers?.[serverName]?.routes || [];
     for (let i = currentRoutes.length - 1; i >= 0; i--) {
       await deleteRouteByIndex(i);
     }
@@ -142,9 +175,9 @@ app.post('/api/reload', async (_, res) => {
     }
 
     fs.writeFileSync(ROUTES_FILE, JSON.stringify(routes, null, 2));
-    res.send('已重载');
+    res.json({ status: 'ok' });
   } catch (e) {
-    res.status(500).send('重载失败: ' + e.message);
+    res.status(500).json({ status: 'failed', error: e.message });
   }
 });
 
