@@ -49,7 +49,7 @@ function getStatusIcon(route) {
 
 async function fetchRoutes() {
   try {
-    const res = await fetch('/api/routes');
+    const res = await fetch('/admin/api/routes');
     const routes = await res.json();
     const tbody = document.querySelector('#routesTable tbody');
     tbody.innerHTML = '';
@@ -62,9 +62,7 @@ async function fetchRoutes() {
         <td>${r.path}</td>
         <td>${r.target}</td>
         <td class="${r.status}"><span class="status-icon">${icon}</span>${r.status}</td>
-        <td>
-          <button onclick="deleteRoute(${i})">删除</button>
-        </td>
+        <td><button onclick="deleteRoute(${i})">删除</button></td>
       `;
       tbody.appendChild(tr);
     });
@@ -79,7 +77,7 @@ async function addRoute() {
   if (!path || !target) return alert('请填写路径和目标');
 
   try {
-    const res = await fetch('/api/routes', {
+    const res = await fetch('/admin/api/routes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path, target })
@@ -97,7 +95,7 @@ async function addRoute() {
 async function deleteRoute(index) {
   if (!confirm('确认删除此路由吗？')) return;
   try {
-    const res = await fetch(`/api/routes/${index}`, { method: 'DELETE' });
+    const res = await fetch(`/admin/api/routes/${index}`, { method: 'DELETE' });
     if (!res.ok) throw new Error(await res.text());
     await fetchRoutes();
   } catch (e) {
@@ -107,7 +105,7 @@ async function deleteRoute(index) {
 
 async function reloadRoutes() {
   try {
-    const res = await fetch('/api/reload', { method: 'POST' });
+    const res = await fetch('/admin/api/reload', { method: 'POST' });
     if (!res.ok) throw new Error(await res.text());
     await fetchRoutes();
   } catch (e) {
