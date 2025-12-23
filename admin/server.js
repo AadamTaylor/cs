@@ -65,10 +65,22 @@ async function requestCaddy(method, url, data) {
 // 添加单条路由
 async function applyRoute(route) {
   const serverName = await getServerName();
-  return await requestCaddy(
-    'post',
+
+  // 1️⃣ 读取当前完整配置
+  const cfg = await axios.get('http://127.0.0.1:2019/config/');
+  const routesPath =
+    cfg.data.apps.http.servers[serverName].routes || [];
+
+  // 2️⃣ 构造新路由
+  const newRoute = buildCaddyRoute(route);
+
+  // 3️⃣ 插入到最前面（关键点）
+  routesPath.unshift(newRoute);
+
+  // 4️⃣ 整体 PUT 回 Caddy
+  await axios.put(
     `http://127.0.0.1:2019/config/apps/http/servers/${serverName}/routes`,
-    buildCaddyRoute(route)
+    routesPath
   );
 }
 
