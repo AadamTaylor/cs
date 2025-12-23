@@ -15,48 +15,69 @@ let routes = fs.existsSync(ROUTES_FILE)
 
 /* ========= 工具函数 ========= */
 
-// 自动检测 server 名
+// 自动检测 Caddy server 名（不写死 srv0）
 async function getServerName() {
   const res = await axios.get('http://localhost:2019/config/');
   const servers = res.data.apps.http.servers;
   return Object.keys(servers)[0];
 }
 
-// 写入路由
+// 构造 Caddy route 对象（✅ 正确 JSON 结构）
+function buildCaddyRoute(route) {
+  return {
+    matcher_sets: [
+      {
+        path: [route.path + '*']
+      }
+    ],
+    handlers: [
+      {
+        handler: 'reverse_proxy',
+        upstreams: [
+          { dial: route.target }
+        ]
+      }
+    ]
+  };
+}
+
+// 添加单条路由（POST 追加）
 async function applyRoute(route) {
   const serverName = await getServerName();
-
   return axios.post(
     `http://localhost:2019/config/apps/http/servers/${serverName}/routes`,
-    {
-      match: [
-        { path: [route.path + '*'] }
-      ],
-      handle: [
-        {
-          handler: 'reverse_proxy',
-          upstreams: [
-            { dial: route.target }
-          ]
-        }
-      ]
-    }
+    buildCaddyRoute(route)
   );
 }
 
-// 清空路由（rollback）
-async function clearRoutes() {
+// 删除指定 index 的路由（⚠️ 这是关键）
+async function deleteRouteByIndex(index) {
   const serverName = await getServerName();
-  await axios.put(
-    `http://localhost:2019/config/apps/http/servers/${serverName}/routes`,
-    []
+  return axios.delete(
+    `http://localhost:2019/config/apps/http/servers/${serverName}/routes/${index}`
   );
+}
+
+// 真实生效检测（health check）
+async function checkRoute(path) {
+  try {
+    const res = await axios.get(`http://127.0.0.1:3000${path}`, {
+      timeout: 2000,
+      validateStatus: () => true
+    });
+    return res.status < 500;
+  } catch {
+    return false;
+  }
 }
 
 /* ========= API ========= */
 
-// 获取路由
-app.get('/api/routes', (req, res) => {
+// 获取路由列表
+app.get('/api/routes', async (_, res) => {
+  for (const r of routes) {
+    r.alive = await checkRoute(r.path);
+  }
   res.json(routes);
 });
 
@@ -71,37 +92,51 @@ app.post('/api/routes', async (req, res) => {
   try {
     await applyRoute(route);
     route.status = 'active';
+    route.alive = await checkRoute(p);
     fs.writeFileSync(ROUTES_FILE, JSON.stringify(routes, null, 2));
-    res.send('生效成功');
+    res.send('路由已生效');
   } catch (e) {
     route.status = 'failed';
     route.error = e.message;
+    fs.writeFileSync(ROUTES_FILE, JSON.stringify(routes, null, 2));
     res.status(500).send('写入失败');
   }
 });
 
-// 删除路由
-app.delete('/api/routes/:path', async (req, res) => {
-  const p = decodeURIComponent(req.params.path);
-  routes = routes.filter(r => r.path !== p);
+// 删除路由（精确删除，不再 PUT）
+app.delete('/api/routes/:index', async (req, res) => {
+  const index = Number(req.params.index);
+  if (isNaN(index)) return res.status(400).send('index 错误');
 
   try {
-    await clearRoutes();
-    for (const r of routes) await applyRoute(r);
+    await deleteRouteByIndex(index);
+    routes.splice(index, 1);
     fs.writeFileSync(ROUTES_FILE, JSON.stringify(routes, null, 2));
-    res.send('已删除并重建');
+    res.send('已删除');
   } catch (e) {
     res.status(500).send('删除失败');
   }
 });
 
-// 一键 reload
+// 一键重载（⚠️ 不再清空 routes）
 app.post('/api/reload', async (_, res) => {
   try {
-    await clearRoutes();
+    const serverName = await getServerName();
+
+    // 先删除所有现有 routes
+    const cfg = await axios.get('http://localhost:2019/config/');
+    const currentRoutes =
+      cfg.data.apps.http.servers[serverName].routes || [];
+
+    for (let i = currentRoutes.length - 1; i >= 0; i--) {
+      await deleteRouteByIndex(i);
+    }
+
+    // 再重新写入
     for (const r of routes) await applyRoute(r);
+
     res.send('已重载');
-  } catch {
+  } catch (e) {
     res.status(500).send('重载失败');
   }
 });
