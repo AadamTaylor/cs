@@ -1,95 +1,107 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh">
 <head>
-  <meta charset="UTF-8">
-  <title>Caddy 路由管理</title>
+<meta charset="UTF-8">
+<title>Caddy 路由管理</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 20px; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+  th { background-color: #f5f5f5; }
+  button { padding: 5px 10px; margin: 2px; }
+  .active { color: green; }
+  .failed { color: red; }
+  .pending { color: orange; }
+</style>
 </head>
 <body>
-  <h1>路由列表</h1>
-  <table id="routeTable" border="1">
-    <thead>
-      <tr>
-        <th>Index</th>
-        <th>路径</th>
-        <th>目标</th>
-        <th>状态</th>
-        <th>操作</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+<h1>Caddy 路由管理</h1>
 
-  <h2>添加路由</h2>
-  <input id="path" placeholder="路径 (例如 /moontv)">
-  <input id="target" placeholder="目标 (例如 localhost:3001)">
-  <button onclick="addRoute()">添加</button>
-  <button onclick="reloadRoutes()">一键重载</button>
+<h3>添加路由</h3>
+路径 <input type="text" id="newPath" placeholder="/moontv">
+目标 <input type="text" id="newTarget" placeholder="localhost:3001">
+<button onclick="addRoute()">添加</button>
+<button onclick="reloadRoutes()">一键重载</button>
 
-  <script>
-    async function fetchRoutes() {
-      const res = await fetch('/api/routes');
-      const routes = await res.json();
-      const tbody = document.querySelector('#routeTable tbody');
-      tbody.innerHTML = '';
-      routes.forEach((r, idx) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${idx}</td>
-          <td>${r.path}</td>
-          <td>${r.target}</td>
-          <td>${r.status}${r.alive === false ? ' ❌' : ''}</td>
-          <td><button onclick="deleteRoute(${idx})">删除</button></td>
-        `;
-        tbody.appendChild(tr);
-      });
-    }
+<h3>路由列表</h3>
+<table id="routesTable">
+  <thead>
+    <tr>
+      <th>Index</th>
+      <th>路径</th>
+      <th>目标</th>
+      <th>状态</th>
+      <th>操作</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
 
-    async function addRoute() {
-      const path = document.getElementById('path').value;
-      const target = document.getElementById('target').value;
-      if (!path || !target) return alert('请输入路径和目标');
+<script>
+async function fetchRoutes() {
+  const res = await fetch('/api/routes');
+  const routes = await res.json();
+  const tbody = document.querySelector('#routesTable tbody');
+  tbody.innerHTML = '';
 
-      const res = await fetch('/api/routes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path, target })
-      });
+  routes.forEach((r, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${i}</td>
+      <td>${r.path}</td>
+      <td>${r.target}</td>
+      <td class="${r.status}">${r.status}${r.alive===false && r.status==='active' ? ' (不可达)' : ''}</td>
+      <td>
+        <button onclick="deleteRoute(${i})">删除</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
 
-      if (res.ok) {
-        alert('路由已生效');
-        document.getElementById('path').value = '';
-        document.getElementById('target').value = '';
-        fetchRoutes();
-      } else {
-        const msg = await res.text();
-        alert('添加失败: ' + msg);
-      }
-    }
+async function addRoute() {
+  const path = document.getElementById('newPath').value.trim();
+  const target = document.getElementById('newTarget').value.trim();
+  if (!path || !target) return alert('请填写路径和目标');
 
-    async function deleteRoute(index) {
-      if (!confirm('确定删除吗？')) return;
-      const res = await fetch(`/api/routes/${index}`, { method: 'DELETE' });
-      if (res.ok) {
-        alert('已删除');
-        fetchRoutes();
-      } else {
-        const msg = await res.text();
-        alert('删除失败: ' + msg);
-      }
-    }
+  try {
+    const res = await fetch('/api/routes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, target })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    document.getElementById('newPath').value = '';
+    document.getElementById('newTarget').value = '';
+    await fetchRoutes();
+  } catch (e) {
+    alert('添加失败: ' + e.message);
+  }
+}
 
-    async function reloadRoutes() {
-      const res = await fetch('/api/reload', { method: 'POST' });
-      if (res.ok) {
-        alert('已重载');
-        fetchRoutes();
-      } else {
-        const msg = await res.text();
-        alert('重载失败: ' + msg);
-      }
-    }
+async function deleteRoute(index) {
+  if (!confirm('确认删除此路由吗？')) return;
+  try {
+    const res = await fetch(`/api/routes/${index}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error(await res.text());
+    await fetchRoutes();
+  } catch (e) {
+    alert('删除失败: ' + e.message);
+  }
+}
 
-    fetchRoutes(); // 页面加载时刷新
-  </script>
+async function reloadRoutes() {
+  try {
+    const res = await fetch('/api/reload', { method: 'POST' });
+    if (!res.ok) throw new Error(await res.text());
+    await fetchRoutes();
+  } catch (e) {
+    alert('重载失败: ' + e.message);
+  }
+}
+
+// 页面加载时刷新表格
+fetchRoutes();
+</script>
 </body>
 </html>
