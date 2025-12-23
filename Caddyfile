@@ -1,13 +1,13 @@
 :3000 {
     encode gzip
 
-    handle_path /admin/* {
-        reverse_proxy 127.0.0.1:4000
-    }
+    # 静态页面直接提供
+    root * /home/admin/public
+    file_server
 
-    handle {
-        root * /home/admin/public
-        file_server
+    # Node API 反代
+    handle_path /admin/api/* {
+        reverse_proxy 127.0.0.1:4000
     }
 
     handle_errors {
