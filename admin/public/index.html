@@ -1,58 +1,53 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
+<meta charset="utf-8">
 <title>Caddy 管理后台</title>
-<style>
-body { font-family: Arial; padding: 20px; }
-input { margin: 5px 0; padding: 5px; width: 300px; }
-button { padding: 5px 10px; }
-ul { padding-left: 20px; }
-</style>
 </head>
 <body>
 <h1>Caddy 管理后台</h1>
 
-<h2>添加新路由</h2>
-<form id="routeForm">
-    <label>路由路径 (如 /moontv)</label><br>
-    <input type="text" id="path" required><br>
-    <label>目标服务 (如 localhost:3001)</label><br>
-    <input type="text" id="target" required><br>
-    <button type="submit">添加路由</button>
+<form id="f">
+路径 <input id="p"> → 目标 <input id="t">
+<button>添加</button>
 </form>
 
-<h2>已添加路由</h2>
-<ul id="routesList"></ul>
+<button onclick="reload()">一键重载</button>
+
+<ul id="list"></ul>
 
 <script>
-async function loadRoutes() {
-    const res = await fetch('/api/routes');
-    const routes = await res.json();
-    const ul = document.getElementById('routesList');
-    ul.innerHTML = '';
-    routes.forEach(r => {
-        const li = document.createElement('li');
-        li.textContent = `${r.path} → ${r.target}`;
-        ul.appendChild(li);
-    });
+async function load() {
+  const r = await fetch('/admin/api/routes').then(r=>r.json());
+  list.innerHTML='';
+  r.forEach(i=>{
+    const li=document.createElement('li');
+    li.innerHTML=`${i.path} → ${i.target} [${i.status}]
+      <button onclick="del('${i.path}')">删</button>`;
+    list.appendChild(li);
+  });
 }
 
-document.getElementById('routeForm').addEventListener('submit', async e => {
-    e.preventDefault();
-    const path = document.getElementById('path').value;
-    const target = document.getElementById('target').value;
-    await fetch('/api/routes', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ path, target })
-    });
-    document.getElementById('path').value = '';
-    document.getElementById('target').value = '';
-    loadRoutes();
-});
+f.onsubmit=async e=>{
+  e.preventDefault();
+  alert(await fetch('/admin/api/routes',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({path:p.value,target:t.value})
+  }).then(r=>r.text()));
+  load();
+};
 
-loadRoutes();
+async function del(p){
+  await fetch('/admin/api/routes/'+encodeURIComponent(p),{method:'DELETE'});
+  load();
+}
+
+async function reload(){
+  alert(await fetch('/admin/api/reload',{method:'POST'}).then(r=>r.text()));
+}
+
+load();
 </script>
 </body>
 </html>
