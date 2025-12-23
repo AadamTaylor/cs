@@ -25,14 +25,21 @@ async function getServerName() {
 // 写入路由
 async function applyRoute(route) {
   const serverName = await getServerName();
+
   return axios.post(
     `http://localhost:2019/config/apps/http/servers/${serverName}/routes`,
     {
-      handle: [{
-        handler: 'reverse_proxy',
-        match: [{ path: [route.path + '*'] }],
-        upstreams: [{ dial: route.target }]
-      }]
+      match: [
+        { path: [route.path + '*'] }
+      ],
+      handle: [
+        {
+          handler: 'reverse_proxy',
+          upstreams: [
+            { dial: route.target }
+          ]
+        }
+      ]
     }
   );
 }
