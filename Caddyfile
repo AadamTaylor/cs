@@ -1,11 +1,16 @@
 :3000 {
-    # 管理后台
-    handle_path /admin* {
-        reverse_proxy localhost:4000
+    encode gzip
+
+    handle_path /admin/* {
+        reverse_proxy 127.0.0.1:4000
     }
 
-    # 其他路径默认首页
     handle {
-        respond "Cloudflare Tunnel + Caddy Ready" 200
+        root * /home/admin/public
+        file_server
+    }
+
+    handle_errors {
+        respond "Not Found" 404
     }
 }
