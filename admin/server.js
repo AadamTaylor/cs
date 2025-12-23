@@ -71,7 +71,6 @@ async function applyRoute(route) {
     return !lockedPaths.some(lp => pathMatch.startsWith(lp));
   });
 
-  // 插入业务路由
   filteredRoutes.unshift(buildCaddyRoute(route));
 
   await requestCaddy(
@@ -124,7 +123,6 @@ async function updateRoutesStatus() {
 
 /* ========= API ========= */
 
-// 给 Node.js 全部 API 加 /admin 前缀
 const adminRouter = express.Router();
 app.use('/admin', adminRouter);
 
@@ -142,8 +140,6 @@ adminRouter.get('/api/routes', async (_, res) => {
 adminRouter.post('/api/routes', async (req, res) => {
   const { path: p, target } = req.body;
   if (!p || !target) return res.status(400).json({ status: 'failed', error: '参数缺失' });
-
-  // 禁止操作锁死路由
   if (['/admin', '/'].some(lp => p.startsWith(lp))) {
     return res.status(403).json({ status: 'failed', error: '禁止修改锁死路由' });
   }
@@ -200,12 +196,10 @@ adminRouter.post('/api/reload', async (_, res) => {
       return !lockedPaths.some(lp => pathMatch.startsWith(lp));
     });
 
-    // 删除业务路由
     for (let i = businessRoutes.length - 1; i >= 0; i--) {
       await deleteRouteByIndex(i);
     }
 
-    // 重新应用业务路由
     for (const r of routes) {
       await applyRoute(r);
       r.alive = await checkRoute(r.path);
