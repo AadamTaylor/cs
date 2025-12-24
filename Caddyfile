@@ -1,23 +1,22 @@
-{
-    admin 127.0.0.1:2019
-    auto_https off
-}
-
 :3000 {
-
-    # 管理 API
-    handle_path /admin/api/* {
-        reverse_proxy 127.0.0.1:4000
-    }
-
-    # 管理页面
-    handle_path /admin/* {
+    # 静态首页或重定向到 /admin
+    handle_path / {
         root * /admin/public
         file_server
     }
 
-    # 所有业务流量 → Node
-    handle {
+    # Admin 页面
+    handle_path /admin* {
+        root * /admin/public
+        file_server
+    }
+
+    # Node API
+    handle_path /admin/api/* {
         reverse_proxy 127.0.0.1:4000
+    }
+
+    handle_errors {
+        respond "Not Found" 404
     }
 }
