@@ -14,15 +14,8 @@ let routes = fs.existsSync(ROUTES_FILE)
 /* ========= Caddy Admin API 工具 ========= */
 async function requestCaddy(method, url, data) {
   try {
-    const res = await axios({
-      method,
-      url,
-      data,
-      validateStatus: () => true,
-    });
-    if (res.headers['content-type']?.includes('application/json') && res.data) {
-      return res.data;
-    }
+    const res = await axios({ method, url, data, validateStatus: () => true });
+    if (res.headers['content-type']?.includes('application/json') && res.data) return res.data;
     if (res.status >= 200 && res.status < 300) return {};
     throw new Error(`Caddy 返回非 JSON 响应: ${res.data}`);
   } catch (e) {
@@ -39,10 +32,7 @@ function buildCaddyRoute(route) {
   return {
     match: [{ path: [route.path + '*'] }],
     handle: [
-      {
-        handler: 'reverse_proxy',
-        upstreams: [{ dial: route.target }]
-      }
+      { handler: 'reverse_proxy', upstreams: [{ dial: route.target }] }
     ]
   };
 }
@@ -59,12 +49,7 @@ async function applyRoute(route) {
   });
 
   filteredRoutes.unshift(buildCaddyRoute(route));
-
-  await requestCaddy(
-    'put',
-    `http://127.0.0.1:2019/config/apps/http/servers/${serverName}/routes`,
-    filteredRoutes
-  );
+  await requestCaddy('put', `http://127.0.0.1:2019/config/apps/http/servers/${serverName}/routes`, filteredRoutes);
 }
 
 async function deleteRouteByIndex(index) {
@@ -79,11 +64,7 @@ async function deleteRouteByIndex(index) {
     return i !== index;
   });
 
-  await requestCaddy(
-    'put',
-    `http://127.0.0.1:2019/config/apps/http/servers/${serverName}/routes`,
-    filteredRoutes
-  );
+  await requestCaddy('put', `http://127.0.0.1:2019/config/apps/http/servers/${serverName}/routes`, filteredRoutes);
 }
 
 async function checkRoute(path) {
@@ -187,5 +168,5 @@ router.post('/reload', async (_, res) => {
   }
 });
 
-// 监听 Node API 0.0.0.0
+// Node 监听 0.0.0.0
 app.listen(4000, '0.0.0.0', () => console.log('Node API running on port 4000'));
