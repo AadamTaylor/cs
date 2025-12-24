@@ -10,10 +10,9 @@
         file_server
     }
 
-    # 首页重定向到 /admin
-    handle_path / {
-        redir /admin
-    }
+    # 首页直接重定向到 /admin
+    @root path /
+    redir @root /admin 302
 
     handle_errors {
         respond "Not Found" 404
