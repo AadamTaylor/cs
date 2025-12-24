@@ -11,7 +11,10 @@ let routes = fs.existsSync(ROUTES_FILE)
   ? JSON.parse(fs.readFileSync(ROUTES_FILE))
   : [];
 
-/* ========= Caddy Admin API 工具 ========= */
+// Node API 监听所有地址
+const PORT = 4000;
+
+// ========= Caddy Admin API 工具 =========
 async function requestCaddy(method, url, data) {
   try {
     const res = await axios({ method, url, data, validateStatus: () => true });
@@ -31,9 +34,7 @@ async function getServerName() {
 function buildCaddyRoute(route) {
   return {
     match: [{ path: [route.path + '*'] }],
-    handle: [
-      { handler: 'reverse_proxy', upstreams: [{ dial: route.target }] }
-    ]
+    handle: [{ handler: 'reverse_proxy', upstreams: [{ dial: route.target }] }]
   };
 }
 
@@ -49,6 +50,7 @@ async function applyRoute(route) {
   });
 
   filteredRoutes.unshift(buildCaddyRoute(route));
+
   await requestCaddy('put', `http://127.0.0.1:2019/config/apps/http/servers/${serverName}/routes`, filteredRoutes);
 }
 
@@ -56,8 +58,8 @@ async function deleteRouteByIndex(index) {
   const serverName = await getServerName();
   const cfg = await requestCaddy('get', 'http://127.0.0.1:2019/config/');
   const currentRoutes = cfg.apps.http.servers[serverName].routes || [];
-  const lockedPaths = ['/admin', '/'];
 
+  const lockedPaths = ['/admin', '/'];
   const filteredRoutes = currentRoutes.filter((r, i) => {
     const pathMatch = r.match?.[0]?.path?.[0] || '';
     if (lockedPaths.some(lp => pathMatch.startsWith(lp))) return true;
@@ -67,7 +69,7 @@ async function deleteRouteByIndex(index) {
   await requestCaddy('put', `http://127.0.0.1:2019/config/apps/http/servers/${serverName}/routes`, filteredRoutes);
 }
 
-async function checkRoute(path) {
+async function checkRouteLocal(path) {
   try {
     const res = await axios.get(`http://127.0.0.1:3000${path}`, { timeout: 2000, validateStatus: () => true });
     return res.status < 500;
@@ -76,15 +78,25 @@ async function checkRoute(path) {
   }
 }
 
+async function checkRoutePublic(path) {
+  try {
+    const res = await axios.get(`https://idx.loyalme.eu.org${path}`, { timeout: 4000, validateStatus: () => true });
+    return res.status < 500;
+  } catch {
+    return false;
+  }
+}
+
 async function updateRoutesStatus() {
   for (const r of routes) {
-    r.alive = await checkRoute(r.path);
-    r.status = r.alive ? 'active' : 'failed';
+    r.localAlive = await checkRouteLocal(r.path);
+    r.publicAlive = await checkRoutePublic(r.path);
+    r.status = r.localAlive ? 'active' : 'failed';
   }
   fs.writeFileSync(ROUTES_FILE, JSON.stringify(routes, null, 2));
 }
 
-/* ========= API ========= */
+// ========= API =========
 const router = express.Router();
 app.use('/admin/api', router);
 
@@ -104,14 +116,15 @@ router.post('/routes', async (req, res) => {
   if (!path || !target) return res.status(400).json({ error: '参数缺失' });
   if (['/admin', '/'].some(lp => path.startsWith(lp))) return res.status(403).json({ error: '禁止修改锁死路由' });
 
-  const route = { path, target, status: 'pending', alive: false };
+  const route = { path, target, status: 'pending', localAlive: false, publicAlive: false };
   routes.push(route);
   fs.writeFileSync(ROUTES_FILE, JSON.stringify(routes, null, 2));
 
   try {
     await applyRoute(route);
-    route.alive = await checkRoute(path);
-    route.status = route.alive ? 'active' : 'failed';
+    route.localAlive = await checkRouteLocal(path);
+    route.publicAlive = await checkRoutePublic(path);
+    route.status = route.localAlive ? 'active' : 'failed';
     fs.writeFileSync(ROUTES_FILE, JSON.stringify(routes, null, 2));
     res.json(route);
   } catch (e) {
@@ -157,8 +170,9 @@ router.post('/reload', async (_, res) => {
 
     for (const r of routes) {
       await applyRoute(r);
-      r.alive = await checkRoute(r.path);
-      r.status = r.alive ? 'active' : 'failed';
+      r.localAlive = await checkRouteLocal(r.path);
+      r.publicAlive = await checkRoutePublic(r.path);
+      r.status = r.localAlive ? 'active' : 'failed';
     }
 
     fs.writeFileSync(ROUTES_FILE, JSON.stringify(routes, null, 2));
@@ -168,20 +182,17 @@ router.post('/reload', async (_, res) => {
   }
 });
 
-/* ========= 公网可达性检测 ========= */
-router.get('/check_public', async (req, res) => {
-  const results = {};
-  for (const r of routes) {
-    try {
-      const url = `${req.protocol}://${req.get('host')}${r.path}`;
-      await axios.get(url, { timeout: 3000 });
-      results[r.path] = true;
-    } catch {
-      results[r.path] = false;
+// 公网可达性检查接口
+router.get('/check_public', async (_, res) => {
+  try {
+    const status = {};
+    for (const r of routes) {
+      status[r.path] = await checkRoutePublic(r.path);
     }
+    res.json(status);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
-  res.json(results);
 });
 
-// Node 监听 0.0.0.0
-app.listen(4000, '0.0.0.0', () => console.log('Node API running on port 4000'));
+app.listen(PORT, '0.0.0.0', () => console.log(`Node API running on port ${PORT}`));
