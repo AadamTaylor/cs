@@ -1,18 +1,14 @@
-:3000 {
-    # 1. Node API
+idx.loyalme.eu.org {
+    encode gzip
+
+    # 静态页面
+    root * /admin/public
+    file_server
+
+    # Node API 反代
     handle_path /admin/api/* {
         reverse_proxy 127.0.0.1:4000
     }
-
-    # 2. Admin 前端静态页面
-    handle_path /admin* {
-        root * /admin/public
-        file_server
-    }
-
-    # 3. 根路径重定向到 /admin
-    @root path /
-    redir @root /admin 302
 
     handle_errors {
         respond "Not Found" 404
