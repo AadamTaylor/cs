@@ -1,16 +1,16 @@
 :3000 {
-    # Admin API 反代 Node
+    # 1. Node API
     handle_path /admin/api/* {
         reverse_proxy 127.0.0.1:4000
     }
 
-    # Admin 前端页面
+    # 2. Admin 前端静态页面
     handle_path /admin* {
         root * /admin/public
         file_server
     }
 
-    # 首页直接重定向到 /admin
+    # 3. 根路径重定向到 /admin
     @root path /
     redir @root /admin 302
 
