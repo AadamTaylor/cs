@@ -48,16 +48,6 @@ function getStatusIcon(route) {
   return '';
 }
 
-async function checkPublicReach(path) {
-  try {
-    const url = window.location.origin + path;
-    const res = await fetch(url, { method: 'HEAD', mode: 'no-cors' });
-    return res.ok || res.type === 'opaque';
-  } catch {
-    return false;
-  }
-}
-
 async function fetchRoutes() {
   try {
     const res = await fetch('/admin/api/routes');
@@ -65,12 +55,16 @@ async function fetchRoutes() {
     const tbody = document.querySelector('#routesTable tbody');
     tbody.innerHTML = '';
 
+    // 调用后台接口获取公网可达性
+    let publicStatus = {};
+    try {
+      const pubRes = await fetch('/admin/api/check_public');
+      publicStatus = await pubRes.json();
+    } catch {}
+
     for (let i = 0; i < routes.length; i++) {
       const r = routes[i];
       const icon = getStatusIcon(r);
-
-      // 公网可达性检测
-      r.publicReach = await checkPublicReach(r.path);
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
@@ -78,7 +72,7 @@ async function fetchRoutes() {
         <td>${r.path}</td>
         <td>${r.target}</td>
         <td class="${r.status}"><span class="status-icon">${icon}</span>${r.status}</td>
-        <td>${r.publicReach ? '✅' : '❌'}</td>
+        <td>${publicStatus[r.path] ? '✅' : '❌'}</td>
         <td><button onclick="deleteRoute(${i})">删除</button></td>
       `;
       tbody.appendChild(tr);
