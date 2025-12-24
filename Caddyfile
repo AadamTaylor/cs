@@ -1,16 +1,23 @@
+{
+    admin 127.0.0.1:2019
+    auto_https off
+}
+
 :3000 {
-    encode gzip
 
-    # 静态页面直接提供
-    root * /home/admin/public
-    file_server
-
-    # Node API 反代
+    # 管理 API
     handle_path /admin/api/* {
         reverse_proxy 127.0.0.1:4000
     }
 
-    handle_errors {
-        respond "Not Found" 404
+    # 管理页面
+    handle_path /admin/* {
+        root * /admin/public
+        file_server
+    }
+
+    # 所有业务流量 → Node
+    handle {
+        reverse_proxy 127.0.0.1:4000
     }
 }
