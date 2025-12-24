@@ -13,23 +13,14 @@
   .failed { color: red; font-weight: bold; }
   .pending { color: orange; font-weight: bold; }
   .status-icon { margin-right: 5px; }
-  .warn { color: #c00; font-size: 13px; margin-top: 10px; }
-  input { padding: 4px; }
 </style>
 </head>
 <body>
-
 <h1>Caddy 路由管理</h1>
 
-<div class="warn">
-⚠️ 状态检测为 <b>容器内访问结果</b>（127.0.0.1），不代表公网 / Cloudflare 实际可达性
-</div>
-
 <h3>添加路由</h3>
-路径
-<input type="text" id="newPath" placeholder="/moontv" />
-目标
-<input type="text" id="newTarget" placeholder="127.0.0.1:3001" />
+路径 <input type="text" id="newPath" placeholder="/moontv">
+目标 <input type="text" id="newTarget" placeholder="localhost:3001">
 <button onclick="addRoute()">添加</button>
 <button onclick="reloadRoutes()">一键重载</button>
 
@@ -37,10 +28,11 @@
 <table id="routesTable">
   <thead>
     <tr>
-      <th>#</th>
+      <th>Index</th>
       <th>路径</th>
       <th>目标</th>
-      <th>状态</th>
+      <th>容器内状态</th>
+      <th>公网可达性</th>
       <th>操作</th>
     </tr>
   </thead>
@@ -50,44 +42,47 @@
 <script>
 function getStatusIcon(route) {
   if (route.status === 'active' && route.alive) return '✅';
-  if (route.status === 'active' && route.alive === false) return '⚠️';
+  if (route.status === 'active' && route.alive === false) return '❌';
   if (route.status === 'failed') return '❌';
-  if (route.status === 'pending') return '⏳';
+  if (route.status === 'pending') return '⚠️';
   return '';
 }
 
-function isLockedPath(path) {
-  return path === '/' || path.startsWith('/admin');
+async function checkPublicReach(path) {
+  try {
+    const url = window.location.origin + path;
+    const res = await fetch(url, { method: 'HEAD', mode: 'no-cors' });
+    return res.ok || res.type === 'opaque';
+  } catch {
+    return false;
+  }
 }
 
 async function fetchRoutes() {
   try {
-    const res = await fetch('/admin/api/routes', { cache: 'no-store' });
+    const res = await fetch('/admin/api/routes');
     const routes = await res.json();
     const tbody = document.querySelector('#routesTable tbody');
     tbody.innerHTML = '';
 
-    routes.forEach((r, i) => {
-      const tr = document.createElement('tr');
+    for (let i = 0; i < routes.length; i++) {
+      const r = routes[i];
       const icon = getStatusIcon(r);
-      const locked = isLockedPath(r.path);
 
+      // 公网可达性检测
+      r.publicReach = await checkPublicReach(r.path);
+
+      const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${i}</td>
-        <td>${r.path}${locked ? ' 🔒' : ''}</td>
+        <td>${r.path}</td>
         <td>${r.target}</td>
-        <td class="${r.status}">
-          <span class="status-icon">${icon}</span>${r.status}
-        </td>
-        <td>
-          ${locked
-            ? '<span style="color:#999">不可操作</span>'
-            : `<button onclick="deleteRoute(${i})">删除</button>`
-          }
-        </td>
+        <td class="${r.status}"><span class="status-icon">${icon}</span>${r.status}</td>
+        <td>${r.publicReach ? '✅' : '❌'}</td>
+        <td><button onclick="deleteRoute(${i})">删除</button></td>
       `;
       tbody.appendChild(tr);
-    });
+    }
   } catch (e) {
     console.error('刷新路由列表失败', e);
   }
@@ -96,21 +91,7 @@ async function fetchRoutes() {
 async function addRoute() {
   const path = document.getElementById('newPath').value.trim();
   const target = document.getElementById('newTarget').value.trim();
-
-  if (!path || !target) {
-    alert('请填写路径和目标');
-    return;
-  }
-
-  if (!path.startsWith('/')) {
-    alert('路径必须以 / 开头');
-    return;
-  }
-
-  if (isLockedPath(path)) {
-    alert('禁止操作 / 或 /admin 路由');
-    return;
-  }
+  if (!path || !target) return alert('请填写路径和目标');
 
   try {
     const res = await fetch('/admin/api/routes', {
@@ -118,48 +99,40 @@ async function addRoute() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path, target })
     });
-
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || '添加失败');
-
+    const route = await res.json();
+    if (!res.ok) throw new Error(route.error || '添加失败');
     document.getElementById('newPath').value = '';
     document.getElementById('newTarget').value = '';
     await fetchRoutes();
   } catch (e) {
-    alert('添加失败：' + e.message);
+    alert('添加失败: ' + e.message);
   }
 }
 
 async function deleteRoute(index) {
   if (!confirm('确认删除此路由吗？')) return;
-
   try {
     const res = await fetch(`/admin/api/routes/${index}`, { method: 'DELETE' });
     if (!res.ok) throw new Error(await res.text());
     await fetchRoutes();
   } catch (e) {
-    alert('删除失败：' + e.message);
+    alert('删除失败: ' + e.message);
   }
 }
 
 async function reloadRoutes() {
-  if (!confirm('确认重载所有业务路由？')) return;
-
   try {
     const res = await fetch('/admin/api/reload', { method: 'POST' });
     if (!res.ok) throw new Error(await res.text());
     await fetchRoutes();
   } catch (e) {
-    alert('重载失败：' + e.message);
+    alert('重载失败: ' + e.message);
   }
 }
 
-/* 初始加载 */
+// 初始化
 fetchRoutes();
-
-/* 轮询频率降低，避免 Cloudflare / Tunnel 压力 */
-setInterval(fetchRoutes, 15000);
+setInterval(fetchRoutes, 15000); // 每15秒刷新一次
 </script>
-
 </body>
 </html>
