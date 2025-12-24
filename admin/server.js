@@ -168,5 +168,20 @@ router.post('/reload', async (_, res) => {
   }
 });
 
+/* ========= 公网可达性检测 ========= */
+router.get('/check_public', async (req, res) => {
+  const results = {};
+  for (const r of routes) {
+    try {
+      const url = `${req.protocol}://${req.get('host')}${r.path}`;
+      await axios.get(url, { timeout: 3000 });
+      results[r.path] = true;
+    } catch {
+      results[r.path] = false;
+    }
+  }
+  res.json(results);
+});
+
 // Node 监听 0.0.0.0
 app.listen(4000, '0.0.0.0', () => console.log('Node API running on port 4000'));
