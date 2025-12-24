@@ -1,19 +1,18 @@
 :3000 {
-    # 静态首页或重定向到 /admin
-    handle_path / {
-        root * /admin/public
-        file_server
+    # Admin API 反代 Node
+    handle_path /admin/api/* {
+        reverse_proxy 127.0.0.1:4000
     }
 
-    # Admin 页面
+    # Admin 前端页面
     handle_path /admin* {
         root * /admin/public
         file_server
     }
 
-    # Node API
-    handle_path /admin/api/* {
-        reverse_proxy 127.0.0.1:4000
+    # 首页重定向到 /admin
+    handle_path / {
+        redir /admin
     }
 
     handle_errors {
